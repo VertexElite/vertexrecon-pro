@@ -488,7 +488,7 @@ func checkHTTPHeaders(url string) {
 	fmt.Printf("  Status: %s\n\n", resp.Status)
 
 	secHeaders := map[string]struct {
-		present bool
+		present  bool
 		critical bool
 	}{
 		"Strict-Transport-Security": {false, true},

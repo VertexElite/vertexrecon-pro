@@ -614,7 +614,7 @@ Usage:
                 if !info.suspicious.is_empty() {
                     sus_count += 1;
                     println!("  {}[!]{} {}", RED, RST, info.path);
-                    println!("      {} {} {} entry:0x{:X} entropy:{}{}:.4{}",
+                    println!("      {} {} {} entry:0x{:X} entropy:{}{:.4}{}",
                              info.class, info.machine, info.elf_type,
                              info.entry_point, ent_color, info.entropy, RST);
                     for s in &info.suspicious {
