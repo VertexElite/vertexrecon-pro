@@ -93,8 +93,20 @@ vertexrecon-pro/
 | `vertex-osint`   | Ruby (`ruby`) — stdlib only, no gems |
 | `vertex-pattern` | OCaml + `ocamlfind`/`ocamlopt` and the `str` library (`ocaml`) |
 
-On **Termux** the build script installs anything missing via `pkg`. On a
-regular Linux distro, install the toolchains with your package manager first.
+On **Termux** the build script installs anything missing via `pkg`. `vertex-net`
+(Go), `vertex-sys` (Rust) and `vertex-osint` (Ruby) build/run natively. OCaml
+isn't in the main Termux repo — it lives in the **TUR** — so if `vertex-pattern`
+is skipped, add it with:
+
+```bash
+pkg install tur-repo && pkg install ocaml
+./build.sh ocaml
+```
+
+The build script now attempts this automatically and skips `vertex-pattern`
+gracefully (the other three tools still build) if OCaml can't be installed.
+
+On a regular Linux distro, install the toolchains with your package manager first.
 
 ## Build
 

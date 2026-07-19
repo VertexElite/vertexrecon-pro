@@ -59,22 +59,54 @@ build_rust() {
     echo -e "  ${GREEN}[✓]${NC} Built: $BINDIR/vertex-sys"
 }
 
+have_ocaml() {
+    command -v ocamlfind &>/dev/null || command -v ocamlopt &>/dev/null || command -v ocamlc &>/dev/null
+}
+
 build_ocaml() {
     echo -e "\n${CYAN}══ Building OCaml: vertex-pattern ══${NC}"
-    install_if_missing "ocamlfind" "ocaml" || {
-        install_if_missing "ocamlopt" "ocaml" || return
-    }
-    
-    cd "$BASEDIR/ocaml"
-    
-    echo -e "  ${YELLOW}[*]${NC} Compiling..."
-    if command -v ocamlfind &>/dev/null; then
-        ocamlfind ocamlopt -package str -linkpkg -o "$BINDIR/vertex-pattern" vertex_pattern.ml 2>/dev/null || \
-        ocamlopt -I +str str.cmxa -o "$BINDIR/vertex-pattern" vertex_pattern.ml
-    else
-        ocamlopt -I +str str.cmxa -o "$BINDIR/vertex-pattern" vertex_pattern.ml
+
+    # Get an OCaml toolchain. On Termux, OCaml lives in the TUR (Termux User
+    # Repository), not the main repo — so try main first, then enable the TUR.
+    if ! have_ocaml; then
+        echo -e "  ${YELLOW}[*]${NC} Installing OCaml..."
+        pkg install -y ocaml 2>/dev/null \
+            || { pkg install -y tur-repo 2>/dev/null && pkg install -y ocaml 2>/dev/null; } \
+            || true
     fi
-    echo -e "  ${GREEN}[✓]${NC} Built: $BINDIR/vertex-pattern"
+
+    if ! have_ocaml; then
+        echo -e "  ${YELLOW}[!]${NC} OCaml toolchain unavailable — skipping vertex-pattern."
+        echo -e "      The other tools still build fine. To add OCaml on Termux:"
+        echo -e "        ${BOLD}pkg install tur-repo && pkg install ocaml${NC}"
+        echo -e "      then re-run: ${BOLD}./build.sh ocaml${NC}"
+        return 0
+    fi
+
+    cd "$BASEDIR/ocaml"
+    echo -e "  ${YELLOW}[*]${NC} Compiling..."
+
+    local built=""
+    # 1) findlib + native  2) native + str  3) bytecode + str (portable fallback)
+    if command -v ocamlfind &>/dev/null; then
+        if ocamlfind ocamlopt -package str -linkpkg -o "$BINDIR/vertex-pattern" vertex_pattern.ml 2>/dev/null; then built=1; fi
+    fi
+    if [ -z "$built" ] && command -v ocamlopt &>/dev/null; then
+        if ocamlopt -I +str str.cmxa -o "$BINDIR/vertex-pattern" vertex_pattern.ml 2>/dev/null; then built=1; fi
+    fi
+    if [ -z "$built" ] && command -v ocamlc &>/dev/null; then
+        if ocamlc -I +str str.cma -o "$BINDIR/vertex-pattern" vertex_pattern.ml 2>/dev/null; then built=1; fi
+    fi
+
+    # Tidy up intermediate artifacts
+    rm -f "$BASEDIR"/ocaml/*.cm* "$BASEDIR"/ocaml/*.o 2>/dev/null || true
+    cd "$BASEDIR"
+
+    if [ -n "$built" ]; then
+        echo -e "  ${GREEN}[✓]${NC} Built: $BINDIR/vertex-pattern"
+    else
+        echo -e "  ${YELLOW}[!]${NC} OCaml present but compile failed — skipping vertex-pattern."
+    fi
 }
 
 setup_ruby() {
