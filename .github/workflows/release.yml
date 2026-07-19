@@ -1,0 +1,132 @@
+name: Release
+
+# Cut a release by pushing a tag like v1.0.0:
+#   git tag -a v1.0.0 -m "v1.0.0" && git push origin v1.0.0
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (e.g. v1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Toolchains ───────────────────────────────────────────
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+      - name: Add Rust targets & cross linker
+        run: |
+          rustup target add aarch64-unknown-linux-gnu
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu ocaml ocaml-findlib
+
+      - name: Prepare dirs
+        run: mkdir -p dist/x86_64 dist/aarch64
+
+      # ── Go: vertex-net (static, runs on Linux AND Termux) ────
+      - name: Build vertex-net
+        working-directory: go
+        run: |
+          [ -f go.mod ] || go mod init vertex-net
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ../dist/x86_64/vertex-net vertex-net.go
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ../dist/aarch64/vertex-net vertex-net.go
+
+      # ── Rust: vertex-sys (glibc/Linux) ───────────────────────
+      - name: Build vertex-sys
+        working-directory: rust
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: |
+          cargo build --release
+          cp target/release/vertex-sys ../dist/x86_64/vertex-sys
+          cargo build --release --target aarch64-unknown-linux-gnu
+          cp target/aarch64-unknown-linux-gnu/release/vertex-sys ../dist/aarch64/vertex-sys
+
+      # ── OCaml: vertex-pattern (native, host arch = x86_64) ───
+      - name: Build vertex-pattern (x86_64)
+        run: |
+          ocamlfind ocamlopt -package str -linkpkg -o dist/x86_64/vertex-pattern ocaml/vertex_pattern.ml
+          # OCaml native cross-compilation to aarch64 is not supported here;
+          # aarch64 users build it from source via build.sh (see INSTALL note).
+
+      # ── Ruby: vertex-osint (interpreted, portable) ───────────
+      - name: Bundle vertex-osint
+        run: |
+          for arch in x86_64 aarch64; do
+            cp ruby/vertex-osint.rb dist/$arch/vertex-osint
+            chmod +x dist/$arch/vertex-osint
+          done
+
+      # ── Package per-arch tarballs ────────────────────────────
+      - name: Package
+        run: |
+          VER="${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}"
+          for arch in x86_64 aarch64; do
+            cp LICENSE README.md dist/$arch/
+            cat > dist/$arch/INSTALL.txt <<EOF
+          Vertex Recon Pro ${VER} — ${arch}
+
+          Included binaries:
+            vertex-net      (Go, static — runs on Linux and Termux/Android)
+            vertex-sys      (Rust, dynamically linked against glibc — Linux)
+            vertex-osint    (Ruby script — needs a 'ruby' runtime)
+            vertex-pattern  (OCaml native — x86_64 tarball only)
+
+          Install: copy the binaries somewhere on your PATH, e.g.
+            install -m755 vertex-* \$PREFIX/bin/    # Termux
+            sudo install -m755 vertex-* /usr/local/bin/   # Linux
+
+          Termux/Android note: vertex-net works out of the box. vertex-sys and
+          vertex-pattern are built against glibc/x86_64 tooling; on Termux
+          (Android/bionic) build those from source with ./build.sh.
+          EOF
+            tar -C dist/$arch -czf vertex-recon-pro-${VER}-linux-${arch}.tar.gz .
+            ( cd dist/$arch && sha256sum vertex-* > ../../SHA256SUMS-${arch}.txt )
+          done
+          cat SHA256SUMS-*.txt > SHA256SUMS.txt
+          ls -lh vertex-recon-pro-*.tar.gz
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Vertex Recon Pro ${{ github.event.inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          body: |
+            ## Vertex Recon Pro ${{ github.event.inputs.tag || github.ref_name }}
+
+            Multi-language defensive security & recon toolkit — first stable release.
+
+            ### Downloads
+            | Platform | Asset |
+            |----------|-------|
+            | Linux / Termux **aarch64** | `vertex-recon-pro-*-linux-aarch64.tar.gz` |
+            | Linux **x86_64** | `vertex-recon-pro-*-linux-x86_64.tar.gz` |
+
+            Verify with `SHA256SUMS.txt`.
+
+            ### What's inside
+            - **vertex-net** (Go) — static binary, runs on Linux **and** Termux/Android
+            - **vertex-sys** (Rust) — glibc Linux binary
+            - **vertex-pattern** (OCaml) — native binary (x86_64 archive)
+            - **vertex-osint** (Ruby) — script, needs a `ruby` runtime
+
+            > Termux users: `vertex-net` works as-is. Build `vertex-sys` /
+            > `vertex-pattern` from source with `./build.sh` (see `INSTALL.txt`).
+
+            ⚠️ For authorized/defensive use only — see `SECURITY.md`.
+          files: |
+            vertex-recon-pro-*-linux-x86_64.tar.gz
+            vertex-recon-pro-*-linux-aarch64.tar.gz
+            SHA256SUMS.txt
