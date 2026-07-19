@@ -1,0 +1,26 @@
+# Build outputs
+/bin/
+/reports/
+
+# Go
+*.exe
+*.test
+*.out
+go.sum
+
+# Rust
+/rust/target/
+Cargo.lock
+
+# OCaml
+*.cmi
+*.cmo
+*.cmx
+*.o
+*.cma
+*.cmxa
+
+# OS / editor
+.DS_Store
+*.swp
+*~
