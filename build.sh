@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # ═══════════════════════════════════════════════════════════════
 #  VERTEX RECON PRO — Multi-Language Security Toolkit
-#  Build script for Go, Rust, Ruby, OCaml components
+#  Build script for Go, Rust, Ruby, C components
 # ═══════════════════════════════════════════════════════════════
 
 set -e
@@ -59,53 +59,30 @@ build_rust() {
     echo -e "  ${GREEN}[✓]${NC} Built: $BINDIR/vertex-sys"
 }
 
-have_ocaml() {
-    command -v ocamlfind &>/dev/null || command -v ocamlopt &>/dev/null || command -v ocamlc &>/dev/null
-}
+build_pattern() {
+    echo -e "\n${CYAN}══ Building C: vertex-pattern ══${NC}"
 
-build_ocaml() {
-    echo -e "\n${CYAN}══ Building OCaml: vertex-pattern ══${NC}"
-
-    # Get an OCaml toolchain. On Termux, OCaml lives in the TUR (Termux User
-    # Repository), not the main repo — so try main first, then enable the TUR.
-    if ! have_ocaml; then
-        echo -e "  ${YELLOW}[*]${NC} Installing OCaml..."
-        pkg install -y ocaml 2>/dev/null \
-            || { pkg install -y tur-repo 2>/dev/null && pkg install -y ocaml 2>/dev/null; } \
-            || true
+    # Native C — Termux ships clang out of the box, so this needs no extra pkg.
+    local CC=""
+    if   command -v clang &>/dev/null; then CC=clang
+    elif command -v cc    &>/dev/null; then CC=cc
+    elif command -v gcc   &>/dev/null; then CC=gcc
+    else
+        install_if_missing "clang" "clang" && CC=clang
     fi
 
-    if ! have_ocaml; then
-        echo -e "  ${YELLOW}[!]${NC} OCaml toolchain unavailable — skipping vertex-pattern."
-        echo -e "      The other tools still build fine. To add OCaml on Termux:"
-        echo -e "        ${BOLD}pkg install tur-repo && pkg install ocaml${NC}"
-        echo -e "      then re-run: ${BOLD}./build.sh ocaml${NC}"
+    if [ -z "$CC" ]; then
+        echo -e "  ${YELLOW}[!]${NC} No C compiler found — skipping vertex-pattern."
+        echo -e "      Install one with: ${BOLD}pkg install clang${NC}  (Termux)"
         return 0
     fi
 
-    cd "$BASEDIR/ocaml"
-    echo -e "  ${YELLOW}[*]${NC} Compiling..."
-
-    local built=""
-    # 1) findlib + native  2) native + str  3) bytecode + str (portable fallback)
-    if command -v ocamlfind &>/dev/null; then
-        if ocamlfind ocamlopt -package str -linkpkg -o "$BINDIR/vertex-pattern" vertex_pattern.ml 2>/dev/null; then built=1; fi
-    fi
-    if [ -z "$built" ] && command -v ocamlopt &>/dev/null; then
-        if ocamlopt -I +str str.cmxa -o "$BINDIR/vertex-pattern" vertex_pattern.ml 2>/dev/null; then built=1; fi
-    fi
-    if [ -z "$built" ] && command -v ocamlc &>/dev/null; then
-        if ocamlc -I +str str.cma -o "$BINDIR/vertex-pattern" vertex_pattern.ml 2>/dev/null; then built=1; fi
-    fi
-
-    # Tidy up intermediate artifacts
-    rm -f "$BASEDIR"/ocaml/*.cm* "$BASEDIR"/ocaml/*.o 2>/dev/null || true
-    cd "$BASEDIR"
-
-    if [ -n "$built" ]; then
+    echo -e "  ${YELLOW}[*]${NC} Compiling with $CC..."
+    if "$CC" -O2 -o "$BINDIR/vertex-pattern" "$BASEDIR/c/vertex-pattern.c" -lm 2>/dev/null \
+       || "$CC" -O2 -o "$BINDIR/vertex-pattern" "$BASEDIR/c/vertex-pattern.c" 2>/dev/null; then
         echo -e "  ${GREEN}[✓]${NC} Built: $BINDIR/vertex-pattern"
     else
-        echo -e "  ${YELLOW}[!]${NC} OCaml present but compile failed — skipping vertex-pattern."
+        echo -e "  ${YELLOW}[!]${NC} Compile failed — skipping vertex-pattern."
     fi
 }
 
@@ -134,14 +111,14 @@ setup_path() {
 # ─── Build targets ────────────────────────────────────────────
 
 case "${1:-all}" in
-    go)     build_go ;;
-    rust)   build_rust ;;
-    ocaml)  build_ocaml ;;
-    ruby)   setup_ruby ;;
+    go)              build_go ;;
+    rust)            build_rust ;;
+    c|pattern)       build_pattern ;;
+    ruby)            setup_ruby ;;
     all)
         build_go
         build_rust
-        build_ocaml
+        build_pattern
         setup_ruby
         setup_path
         
@@ -166,6 +143,6 @@ case "${1:-all}" in
         echo -e "  ${YELLOW}Run 'source ~/.bashrc' to refresh PATH${NC}"
         ;;
     *)
-        echo "Usage: $0 [go|rust|ocaml|ruby|all]"
+        echo "Usage: $0 [go|rust|c|ruby|all]"
         ;;
 esac

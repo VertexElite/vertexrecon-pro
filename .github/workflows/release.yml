@@ -29,7 +29,7 @@ jobs:
         run: |
           rustup target add aarch64-unknown-linux-gnu
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu ocaml ocaml-findlib
+          sudo apt-get install -y gcc-aarch64-linux-gnu
 
       - name: Prepare dirs
         run: mkdir -p dist/x86_64 dist/aarch64
@@ -53,12 +53,11 @@ jobs:
           cargo build --release --target aarch64-unknown-linux-gnu
           cp target/aarch64-unknown-linux-gnu/release/vertex-sys ../dist/aarch64/vertex-sys
 
-      # ── OCaml: vertex-pattern (native, host arch = x86_64) ───
-      - name: Build vertex-pattern (x86_64)
+      # ── C: vertex-pattern (native, both arches) ──────────────
+      - name: Build vertex-pattern
         run: |
-          ocamlfind ocamlopt -package str -linkpkg -o dist/x86_64/vertex-pattern ocaml/vertex_pattern.ml
-          # OCaml native cross-compilation to aarch64 is not supported here;
-          # aarch64 users build it from source via build.sh (see INSTALL note).
+          cc -O2 -o dist/x86_64/vertex-pattern c/vertex-pattern.c -lm
+          aarch64-linux-gnu-gcc -O2 -o dist/aarch64/vertex-pattern c/vertex-pattern.c -lm
 
       # ── Ruby: vertex-osint (interpreted, portable) ───────────
       - name: Bundle vertex-osint
@@ -79,17 +78,17 @@ jobs:
 
           Included binaries:
             vertex-net      (Go, static — runs on Linux and Termux/Android)
-            vertex-sys      (Rust, dynamically linked against glibc — Linux)
+            vertex-sys      (Rust — glibc Linux binary)
             vertex-osint    (Ruby script — needs a 'ruby' runtime)
-            vertex-pattern  (OCaml native — x86_64 tarball only)
+            vertex-pattern  (C native — this ${arch} archive)
 
           Install: copy the binaries somewhere on your PATH, e.g.
             install -m755 vertex-* \$PREFIX/bin/    # Termux
             sudo install -m755 vertex-* /usr/local/bin/   # Linux
 
-          Termux/Android note: vertex-net works out of the box. vertex-sys and
-          vertex-pattern are built against glibc/x86_64 tooling; on Termux
-          (Android/bionic) build those from source with ./build.sh.
+          Termux/Android note: vertex-net and vertex-pattern run out of the box.
+          vertex-sys is built here against glibc; on Termux (Android/bionic)
+          it builds natively from source with ./build.sh rust.
           EOF
             tar -C dist/$arch -czf vertex-recon-pro-${VER}-linux-${arch}.tar.gz .
             ( cd dist/$arch && sha256sum vertex-* > ../../SHA256SUMS-${arch}.txt )
@@ -119,11 +118,11 @@ jobs:
             ### What's inside
             - **vertex-net** (Go) — static binary, runs on Linux **and** Termux/Android
             - **vertex-sys** (Rust) — glibc Linux binary
-            - **vertex-pattern** (OCaml) — native binary (x86_64 archive)
+            - **vertex-pattern** (C) — native binary, both arches
             - **vertex-osint** (Ruby) — script, needs a `ruby` runtime
 
-            > Termux users: `vertex-net` works as-is. Build `vertex-sys` /
-            > `vertex-pattern` from source with `./build.sh` (see `INSTALL.txt`).
+            > Termux users: `vertex-net` and `vertex-pattern` work as-is. Build
+            > `vertex-sys` natively from source with `./build.sh rust` (see `INSTALL.txt`).
 
             ⚠️ For authorized/defensive use only — see `SECURITY.md`.
           files: |

@@ -14,7 +14,7 @@ Defensive analysis · threat hunting · authorized security assessment
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Termux%20%7C%20Linux-informational.svg)](#requirements)
-![Languages](https://img.shields.io/badge/languages-Go%20%7C%20Rust%20%7C%20Ruby%20%7C%20OCaml-orange.svg)
+![Languages](https://img.shields.io/badge/languages-Go%20%7C%20Rust%20%7C%20Ruby%20%7C%20C-orange.svg)
 [![Use: Authorized only](https://img.shields.io/badge/use-authorized%20only-red.svg)](SECURITY.md)
 
 </div>
@@ -37,7 +37,7 @@ Defensive analysis · threat hunting · authorized security assessment
   - [vertex-net (Go)](#vertex-net--go)
   - [vertex-sys (Rust)](#vertex-sys--rust)
   - [vertex-osint (Ruby)](#vertex-osint--ruby)
-  - [vertex-pattern (OCaml)](#vertex-pattern--ocaml)
+  - [vertex-pattern (C)](#vertex-pattern--c)
 - [Reports](#reports)
 - [Legal & ethical use](#-legal--ethical-use)
 - [Contributing](#contributing)
@@ -61,7 +61,7 @@ reports on it.
 | **`vertex-net`**     | Go    | Network recon | `/proc/net` connection analysis, concurrent port scanning w/ banner grab, DNS + TLS recon, HTTP security-header auditing, malware **IOC** domain checks, live connection monitor |
 | **`vertex-sys`**     | Rust  | System inspection | ELF header parsing, Shannon **entropy** analysis (packed/encrypted detection), `strings` w/ threat keywords, filesystem anomaly scan, **hidden-process** detection |
 | **`vertex-osint`**   | Ruby  | OSINT | crt.sh **subdomain** enumeration, WAF/CDN + tech fingerprinting, TLS/cert analysis, IP/ASN intel, Wayback history, **JSON + HTML report** generation |
-| **`vertex-pattern`** | OCaml | Binary forensics | File-magic identification, **hex pattern** search, per-block entropy map, malware **signature scanning** (shellcode, webshells, CS beacons), hex dumps |
+| **`vertex-pattern`** | C     | Binary forensics | File-magic identification, **hex pattern** search, per-block entropy map, malware **signature scanning** (shellcode, webshells, CS beacons), hex dumps |
 
 ## Repository layout
 
@@ -75,8 +75,10 @@ vertexrecon-pro/
 │   └── src/main.rs          # Rust system inspector
 ├── ruby/
 │   └── vertex-osint.rb      # Ruby OSINT engine
+├── c/
+│   └── vertex-pattern.c     # C binary pattern matcher
 ├── ocaml/
-│   └── vertex_pattern.ml    # OCaml binary pattern matcher
+│   └── vertex_pattern.ml    # Original OCaml port (reference; not built by default)
 ├── README.md
 ├── SECURITY.md              # Responsible-use policy + reporting
 ├── CONTRIBUTING.md
@@ -91,20 +93,17 @@ vertexrecon-pro/
 | `vertex-net`     | Go (`golang`) |
 | `vertex-sys`     | Rust + Cargo (`rust`) |
 | `vertex-osint`   | Ruby (`ruby`) — stdlib only, no gems |
-| `vertex-pattern` | OCaml + `ocamlfind`/`ocamlopt` and the `str` library (`ocaml`) |
+| `vertex-pattern` | C compiler — `clang` (Termux default) / `cc` / `gcc`; libc + libm only |
 
-On **Termux** the build script installs anything missing via `pkg`. `vertex-net`
-(Go), `vertex-sys` (Rust) and `vertex-osint` (Ruby) build/run natively. OCaml
-isn't in the main Termux repo — it lives in the **TUR** — so if `vertex-pattern`
-is skipped, add it with:
+On **Termux** the build script installs anything missing via `pkg`. **All four
+tools build and run natively on Termux/Android** — `vertex-net` (Go),
+`vertex-sys` (Rust), `vertex-osint` (Ruby), and `vertex-pattern` (C, via the
+`clang` that ships with Termux). No external repos or exotic toolchains needed.
 
-```bash
-pkg install tur-repo && pkg install ocaml
-./build.sh ocaml
-```
-
-The build script now attempts this automatically and skips `vertex-pattern`
-gracefully (the other three tools still build) if OCaml can't be installed.
+> `vertex-pattern` was originally written in OCaml; that source is preserved in
+> `ocaml/vertex_pattern.ml` for reference. It was ported to C because OCaml is no
+> longer packaged for Termux, and the C build is dependency-free and native on
+> every target.
 
 On a regular Linux distro, install the toolchains with your package manager first.
 
@@ -115,7 +114,7 @@ into `./bin/` (offering to add it to your `PATH`):
 
 ```bash
 ./build.sh          # build everything
-./build.sh go       # or build one component: go | rust | ocaml | ruby
+./build.sh go       # or build one component: go | rust | c | ruby
 ```
 
 Then, after `source ~/.bashrc` (or running the binaries from `./bin/` directly):
@@ -163,7 +162,7 @@ vertex-osint ip <domain>      # IP + ASN/org intelligence
 vertex-osint wayback <domain> # Wayback Machine snapshot history
 ```
 
-### `vertex-pattern` — OCaml
+### `vertex-pattern` — C
 
 ```bash
 vertex-pattern analyze <file>          # Full binary analysis (all of the below)

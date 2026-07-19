@@ -5,6 +5,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **`vertex-pattern` reimplemented in C** (was OCaml). OCaml is no longer
+  packaged for Termux/Android, so the tool couldn't build on-device. The C
+  port is dependency-free (libc + libm), builds natively with the `clang` that
+  ships with Termux, and cross-compiles to aarch64 — so **all four tools now
+  build natively on Termux**. Same subcommands and output. The original OCaml
+  source is preserved under `ocaml/` for reference.
+- `build.sh`: `ocaml` target replaced by `c` (alias `pattern`); OCaml step no
+  longer aborts the run on failure.
+
 ### Added
 - Initial public release of the Vertex Recon Pro toolkit.
 - `vertex-net` (Go): `/proc/net` connection analysis, concurrent port scanning
